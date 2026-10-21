@@ -1,0 +1,96 @@
+groups:
+  - name: plataforma
+    rules:
+      - alert: PlataformaTaxaErrosAlta
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[2m]))
+            / sum(rate(http_requests_total[2m])) > 0.05
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Taxa de erros 5xx da ShopLab em {{ $value | humanizePercentage }} (limite 5%)"
+
+      - alert: PlataformaLenta
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[2m]))) > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latência p95 da ShopLab em {{ $value | printf \"%.2f\" }}s (limite 1s)"
+
+      - alert: PlataformaTimeouts
+        expr: sum(rate(http_requests_total{status="504"}[2m])) * 60 > 3
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | printf \"%.1f\" }} timeouts por minuto (gateway de pagamento ou pesquisa)"
+
+      - alert: PlataformaForcaBrutaLogin
+        expr: sum(rate(http_requests_total{route="/api/login",status="401"}[2m])) * 60 > 60
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value | printf \"%.0f\" }} logins falhados por minuto: possível ataque de força bruta"
+
+      - alert: PlataformaSemTrafego
+        expr: sum(rate(http_requests_total[2m])) == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A ShopLab não recebe pedidos há mais de 2 minutos"
+
+      - alert: PlataformaInacessivel
+        expr: up{job="shoplab-webapp"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "O Prometheus não consegue contactar a webapp ShopLab"
+
+  - name: clickhouse
+    rules:
+      - alert: ClickHouseDown
+        expr: up{job="clickhouse"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ClickHouse não responde ao scrape do Prometheus"
+
+      - alert: ClickHouseTooManyParts
+        expr: ClickHouseAsyncMetrics_MaxPartCountForPartition > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Partição com {{ $value }} parts, merges não estão a acompanhar"
+
+      - alert: ClickHouseHighMemory
+        expr: ClickHouseMetrics_MemoryTracking > 1.5e9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ClickHouse a usar mais de 1.5 GB de memória"
+
+  - name: uptime-kuma
+    rules:
+      - alert: MonitorEmBaixo
+        expr: monitor_status == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Uptime Kuma: '{{ $labels.monitor_name }}' está DOWN"
+
+      - alert: UptimeKumaSemMetricas
+        expr: up{job="uptime-kuma"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "O Prometheus não consegue ler as métricas do Uptime Kuma (ver logs do kuma-setup)"

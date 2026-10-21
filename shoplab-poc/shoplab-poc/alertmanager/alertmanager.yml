@@ -1,0 +1,12 @@
+route:
+  receiver: logger
+  group_by: [alertname]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 1h
+
+receivers:
+  - name: logger
+    webhook_configs:
+      - url: http://alert-logger:5001/
+        send_resolved: true
